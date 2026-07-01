@@ -49,13 +49,7 @@ client_scripts {
     'client/editable/qb.lua',
 }
 
-escrow_ignore {
-    'config.lua',
-    'config_server.lua',
-    'locale.lua',
-    'client/editable/*.lua',
-    'server/editable/*.lua',
-}
+
 
 dependencies {
     'es_extended',
