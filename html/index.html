@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="js/jquery.js"></script>
+    <script src="js/chart.js"></script>
+    <script src="js/chartjs-annotation.js"></script>
+    <script src="js/html2canvas.js"></script>
+</head>
+<body>
+    <div class="chart">
+        <canvas id="chart"></canvas>
+        <span class="watermark">REVISION RP</span>
+        <span class="title" id="title"></span>
+    </div>
+</body>
+</html>
+
+
+<script>
+    $(document).ready(() => {
+        let times = [];
+
+        let localeSet = false;
+        let title = '';
+        let peakHp = 'Peak HP';
+        let peakTorque = 'Peak Torque';
+        let torqueUnit = 'nm';
+
+        window.addEventListener('message', ({data}) => {
+            if (data.event === 'update') {
+                if (times.length > 600) {
+                    times.shift();
+                }
+                times.push({
+                    rpm: event.data.rpm,
+                    hp: event.data.hp,
+                    torque: event.data.torque,
+                });
+
+                setChart();
+
+                if (!localeSet) {
+                    setLocale(data);
+                }
+            }
+            if (data.event === 'capture-image') {
+                captureImage(data.dynoKey);
+            }
+        });
+
+        function setLocale(data) {
+            localeSet = true;
+
+            title = data.title;
+            peakHp = data.peakHp;
+            peakTorque = data.peakTorque;
+            torqueUnit = data.torqueUnit;
+            $('#title').html(title);
+        }
+
+        function captureImage(dynoKey) {
+            $('.chart').addClass('screenshot');
+            $('.watermark').addClass('screenshot');
+            $('.title').addClass('screenshot');
+            html2canvas(document.querySelector(".chart")).then(canvas => {
+                const base64 = canvas.toDataURL();
+                fetch(`https://kq_dyno/SaveDynoImage`, {
+                    method: 'POST',
+                    body: JSON.stringify({img: base64, dynoKey}),
+                });
+
+                $('.chart').removeClass('screenshot');
+                $('.watermark').removeClass('screenshot');
+                $('.title').removeClass('screenshot');
+            });
+        }
+
+        function setChart() {
+            const chart = Chart.getChart("chart");
+
+            // If the chart exists, destroy it
+            if (chart) {
+                chart.destroy();
+            }
+
+            const xValues = times.map(({ rpm, hp, torque }) => rpm);
+            const hpValues = times.map(({ rpm, hp, torque }) => parseInt(hp));
+            const torqueValues = times.map(({ rpm, hp, torque }) => parseInt(torque));
+
+            const ctx = document.getElementById('chart').getContext('2d');
+
+            Chart.defaults.font.size = 33;
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: xValues,
+                    datasets: [
+                        {
+                            data: hpValues,
+                            label: 'Horsepower',
+                            borderColor: 'red',
+                            fill: false
+                        },
+                        {
+                            data: torqueValues,
+                            label: 'Torque',
+                            borderColor: 'blue',
+                            fill: false
+                        },
+                    ],
+                },
+                options: {
+                    animation: false,
+                    elements: {
+                        point: {
+                            radius: 1
+                        },
+                    },
+                    scales: {
+                        y: {
+                            display: true,
+                            min: 0,
+                            max: Math.ceil(Math.max(Math.max(...torqueValues), Math.max(...hpValues)) * 1.1),
+                            gridLines: {
+                                color: 'rgba(255,255,255,0.3)'
+                            },
+                        },
+                        x: {
+                            type: 'category',
+                            title: 'RPM',
+                            display: true,
+                            clip: true,
+                            ticks: {
+                                stepSize: 500, // Set the step size to 500
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                        annotation: {
+                            annotations: [
+                                {
+                                    type: 'line',
+                                    mode: 'horizontal',
+                                    scaleID: 'y',
+                                    value: Math.max(...hpValues), // Set the value to where you want the line
+                                    borderColor: 'red', // Color of the line
+                                    borderWidth: 2, // Width of the line
+                                    borderDash: [20],
+                                    label: {
+                                        display: true,
+                                        content: peakHp + ' ' + Math.max(...hpValues), // Set the label content
+                                        enabled: true, // Show the label
+                                        position: '45%', // Position of the label ('start', 'center', or 'end')
+                                    }
+                                },
+                                {
+                                    type: 'line',
+                                    mode: 'horizontal',
+                                    scaleID: 'y',
+                                    value: Math.max(...torqueValues), // Set the value to where you want the line
+                                    borderColor: 'blue', // Color of the line
+                                    borderWidth: 2, // Width of the line
+                                    borderDash: [20],
+                                    label: {
+                                        display: true,
+                                        content: peakTorque + ' ' + Math.max(...torqueValues) + ' ' + torqueUnit, // Set the label content
+                                        enabled: true, // Show the label
+                                        position: '15%', // Position of the label ('start', 'center', or 'end')
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+            });
+        }
+    });
+</script>
+
+<style>
+    html {
+        background-color: rgb(240, 240, 240);
+    }
+
+    .chart {
+        padding: 12px;
+    }
+
+    .chart.screenshot {
+        padding-top: 600px;
+        height: 1280px;
+        width: 1280px;
+    }
+
+    .watermark.screenshot {
+        bottom: -550px !important;
+    }
+
+    .watermark {
+        color: rgba(0, 0, 0, 0.2);
+        font-size: 22px;
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: Tahoma, sans-serif;
+        margin: 0;
+    }
+
+    .title {
+        color: #31d4a896 ;
+        font-size: 30px;
+        position: absolute;
+        bottom: 45px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: Tahoma, sans-serif;
+        margin: 0;
+    }
+
+    .title.screenshot {
+        bottom: 130px !important;
+        font-size: 64px !important;
+    }
+</style>
