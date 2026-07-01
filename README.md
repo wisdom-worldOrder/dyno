@@ -1,0 +1,2 @@
+# dyno
+fivem dyno script
